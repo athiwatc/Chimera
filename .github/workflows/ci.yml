@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: '0'
+  RUST_BACKTRACE: '1'
+
+jobs:
+  quality:
+    name: Formatting, Clippy, and docs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
+      - name: Check formatting
+        run: cargo +stable fmt --all -- --check
+      - name: Run Clippy
+        run: cargo +stable clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Check documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo +stable doc --locked --workspace --all-features --no-deps --document-private-items
+
+  test:
+    name: Test and build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            binary: chimera
+          - os: macos-15
+            binary: chimera
+          - os: windows-2025
+            binary: chimera.exe
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
+      - name: Run tests
+        run: cargo +stable test --locked --workspace --all-targets --all-features
+      - name: Build release binary
+        run: cargo +stable build --release --locked
+      - name: Smoke test release binary
+        run: ./target/release/${{ matrix.binary }} --help
+      - name: Package binary and checksum
+        env:
+          BINARY: ${{ matrix.binary }}
+        run: |
+          archive="chimera-${RUNNER_OS}-${RUNNER_ARCH}.tar.gz"
+          mkdir -p dist
+          cp "target/release/$BINARY" README.md dist/
+          tar -czf "$archive" -C dist .
+          case "$RUNNER_OS" in
+            macOS) shasum -a 256 "$archive" ;;
+            *) sha256sum "$archive" ;;
+          esac > "$archive.sha256"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: chimera-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            chimera-*.tar.gz
+            chimera-*.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  msrv:
+    name: Minimum Rust 1.88
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install minimum supported Rust
+        run: rustup toolchain install 1.88.0 --profile minimal --no-self-update
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          cmd-format: rustup run 1.88.0 {0}
+          save-if: ${{ github.event_name == 'push' && github.ref_name == github.event.repository.default_branch }}
+      - name: Test minimum supported Rust
+        run: cargo +1.88.0 test --locked --workspace --all-targets --all-features
+
+  workflows:
+    name: Validate GitHub Actions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: stable
+          cache: false
+      - name: Validate workflows with actionlint
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 -color
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+      - name: Cache cargo-audit
+        id: audit-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-0.23.0-${{ runner.os }}-${{ runner.arch }}
+      - name: Install cargo-audit
+        if: steps.audit-cache.outputs.cache-hit != 'true'
+        run: cargo +stable install cargo-audit --locked --version 0.23.0
+      - name: Audit dependencies against RustSec
+        run: cargo audit --file Cargo.lock
+
+  ci:
+    name: CI passed
+    if: ${{ always() }}
+    needs: [quality, test, msrv, workflows, audit]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every check to pass
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        run: jq -e 'all(.[]; .result == "success")' <<< "$JOB_RESULTS"

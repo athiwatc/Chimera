@@ -68,4 +68,10 @@ The Claude Code delegate skips local Claude settings and MCP servers. The Codex 
 
 Run `cargo test --locked` to check MCP discovery, history pagination, and project isolation with local fixtures. The tests run without harness credentials.
 
+## Continuous integration
+
+GitHub Actions runs on pushes, pull requests, manual dispatch, and a weekly schedule. It checks formatting, Clippy, documentation, workflow syntax, and the lockfile against RustSec advisories. It tests the declared minimum Rust version of 1.88 and builds and tests stable Rust on Linux, macOS, and Windows. The MCP integration test uses local fixtures and runs without provider credentials.
+
+Each platform uploads a release binary with this README and a SHA-256 checksum as a workflow artifact, retained for 14 days. The `CI passed` check requires every job to succeed and can be selected as a required branch protection check. Dependabot opens weekly updates for Cargo dependencies and pinned GitHub Actions.
+
 [Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference) · [Codex App Server reference](https://developers.openai.com/codex/app-server) · [OpenCode API reference](https://opencode.ai/docs/api)
