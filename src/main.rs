@@ -3,6 +3,7 @@ mod codex;
 mod model;
 mod opencode;
 mod process;
+mod register;
 
 use std::env;
 use std::ffi::OsString;
@@ -236,7 +237,7 @@ fn project_path() -> Result<Option<PathBuf>> {
         None => env::var_os("CHIMERA_PROJECT"),
         Some(arg) if arg == "--help" || arg == "-h" => {
             println!(
-                "Usage: chimera [--project <absolute directory>]\nCHIMERA_PROJECT can supply the directory instead."
+                "Usage: chimera [--project <absolute directory>]\nCHIMERA_PROJECT can supply the directory instead.\n\nRegister with an agent: chimera register [--agent <codex|claude|opencode>] [--project <directory>]\nRun chimera register --help for details."
             );
             return Ok(None);
         }
@@ -276,6 +277,9 @@ fn project_path() -> Result<Option<PathBuf>> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    if env::args_os().nth(1).is_some_and(|arg| arg == "register") {
+        return register::run(env::args_os().skip(2));
+    }
     if let Some(project) = project_path()? {
         Chimera::new(project)
             .serve(rmcp::transport::stdio())
