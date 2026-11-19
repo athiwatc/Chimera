@@ -14,6 +14,38 @@ Set `/absolute/path/to/project` to the directory whose sessions you want to shar
 | Claude Code | Reads history from local transcripts under `~/.claude/projects` or `$CLAUDE_CONFIG_DIR/projects`. Delegates over the CLI's streaming JSON protocol and requires `--restricted` support. |
 | OpenCode | Starts `opencode serve` on authenticated loopback and uses the local session API for history and delegation. Requires OpenCode 2.x. |
 
+Register from the project you want to share:
+
+```sh
+/absolute/path/to/Chimera/target/release/chimera register
+```
+
+Choose Codex, Claude Code, or OpenCode in the picker. Chimera uses its own absolute
+executable path and the current project directory to complete registration. Use
+`q`, EOF, or Ctrl+C to cancel the picker before any changes are made.
+
+For scripts, select the agent explicitly (no prompt):
+
+```sh
+chimera register --agent codex --project /absolute/path/to/project
+chimera register --agent claude --project /absolute/path/to/project
+chimera register --agent opencode --project /absolute/path/to/project
+```
+
+`--project` accepts relative paths and overrides `CHIMERA_PROJECT`. If neither is
+set, Chimera uses the current directory. Non-interactive runs require `--agent`.
+
+- Codex uses its global `mcp add` command and honors `CHIMERA_CODEX_BIN`. Running
+  it again points that global registration at the selected project.
+- Claude Code uses `mcp add` with local scope in the selected project and honors
+  `CHIMERA_CLAUDE_BIN`.
+- OpenCode adds the entry to the project's `opencode.json` or `opencode.jsonc`,
+  keeping existing settings and comments. Chimera reports an error if both
+  files exist, the config is invalid, or another `chimera` entry is present
+  with different settings.
+
+Run `chimera register --help` for options.
+
 Register Chimera in Codex with this command.
 
 ```sh
@@ -27,7 +59,7 @@ claude mcp add --scope local --transport stdio chimera -- \
   /absolute/path/to/Chimera/target/release/chimera --project /absolute/path/to/project
 ```
 
-To register Chimera in OpenCode 2, merge this entry into the project's `opencode.json`.
+To register Chimera manually in OpenCode 2, merge this entry into the project's `opencode.json` or `opencode.jsonc`.
 
 ```json
 {
