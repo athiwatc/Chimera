@@ -4,7 +4,15 @@ Chimera is a local MCP server written in Rust. It gives Codex, Claude Code, Open
 
 ## Set up
 
-Install Rust 1.88 or later and run `cargo build --release --locked` in the Chimera checkout. The resulting executable is `target/release/chimera`. It runs without Node.js.
+### Install a binary (recommended)
+
+Choose a published version from [GitHub Releases](https://github.com/athiwatc/Chimera/releases). Prebuilt, smoke-tested archives are available for Linux x86_64, macOS Apple Silicon (ARM64), and Windows x86_64, with SHA-256 checksums. Follow [the installation, checksum verification, upgrade, and rollback guide](docs/releases.md). There is no Node.js or Rust toolchain requirement for a prebuilt binary.
+
+On Linux and macOS the guide installs a stable executable at `~/.local/bin/chimera`; on Windows it uses `%USERPROFILE%\\chimera\\bin\\chimera.exe`. Use the **absolute path** to that stable executable when registering MCP clients; it stays the same after upgrades. No released version should be assumed available until it appears on GitHub Releases.
+
+### Build from source
+
+For other platforms or development, install Rust 1.88 or later and run `cargo build --release --locked` in the Chimera checkout. The resulting executable is `target/release/chimera` (or `chimera.exe` on Windows). It runs without Node.js.
 
 Set `/absolute/path/to/project` to the directory whose sessions you want to share. Install the harnesses you want Chimera to connect to.
 
@@ -14,11 +22,13 @@ Set `/absolute/path/to/project` to the directory whose sessions you want to shar
 | Claude Code | Reads history from local transcripts under `~/.claude/projects` or `$CLAUDE_CONFIG_DIR/projects`. Delegates over the CLI's streaming JSON protocol and requires `--restricted` support. |
 | OpenCode | Starts `opencode serve` on authenticated loopback and uses the local session API for history and delegation. Requires OpenCode 2.x. |
 
-Register from the project you want to share:
+Register from the project you want to share, using the absolute path to your installed binary:
 
 ```sh
-/absolute/path/to/Chimera/target/release/chimera register
+$HOME/.local/bin/chimera register
 ```
+
+On Windows PowerShell, use `& "$HOME\\chimera\\bin\\chimera.exe" register`. If you built from source, substitute the absolute path to `target/release/chimera` (or `chimera.exe`).
 
 Choose Codex, Claude Code, or OpenCode in the picker. Chimera uses its own absolute
 executable path and the current project directory to complete registration. Use
@@ -49,14 +59,14 @@ Run `chimera register --help` for options.
 Register Chimera in Codex with this command.
 
 ```sh
-codex mcp add chimera -- /absolute/path/to/Chimera/target/release/chimera --project /absolute/path/to/project
+codex mcp add chimera -- /absolute/path/to/stable/chimera --project /absolute/path/to/project
 ```
 
 To register Chimera in Claude Code, run this command from the target project.
 
 ```sh
 claude mcp add --scope local --transport stdio chimera -- \
-  /absolute/path/to/Chimera/target/release/chimera --project /absolute/path/to/project
+  /absolute/path/to/stable/chimera --project /absolute/path/to/project
 ```
 
 To register Chimera manually in OpenCode 2, merge this entry into the project's `opencode.json` or `opencode.jsonc`.
@@ -67,7 +77,7 @@ To register Chimera manually in OpenCode 2, merge this entry into the project's 
     "servers": {
       "chimera": {
         "type": "local",
-        "command": ["/absolute/path/to/Chimera/target/release/chimera", "--project", "/absolute/path/to/project"]
+        "command": ["/absolute/path/to/stable/chimera", "--project", "/absolute/path/to/project"]
       }
     }
   }
@@ -104,6 +114,6 @@ Run `cargo test --locked` to check MCP discovery, history pagination, and projec
 
 GitHub Actions runs on pushes, pull requests, manual dispatch, and a weekly schedule. It checks formatting, Clippy, documentation, workflow syntax, and the lockfile against RustSec advisories. It tests the declared minimum Rust version of 1.88 and builds and tests stable Rust on Linux, macOS, and Windows. The MCP integration test uses local fixtures and runs without provider credentials.
 
-Each platform uploads a release binary with this README and a SHA-256 checksum as a workflow artifact, retained for 14 days. The `CI passed` check requires every job to succeed and can be selected as a required branch protection check. Dependabot opens weekly updates for Cargo dependencies and pinned GitHub Actions.
+Each platform uploads a release binary with this README and a SHA-256 checksum as a workflow artifact, retained for 14 days. After an explicitly approved version tag passes the same CI, the separate manually dispatched Release workflow can publish those already-tested archives as durable GitHub Release downloads. Release publication, tag creation, and manual workflow dispatch are not automatic. See [binary releases and rollback](docs/releases.md). The `CI passed` check requires every job to succeed and can be selected as a required branch protection check. Dependabot opens weekly updates for Cargo dependencies and pinned GitHub Actions.
 
 [Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference) · [Codex App Server reference](https://developers.openai.com/codex/app-server) · [OpenCode API reference](https://opencode.ai/docs/api)
